@@ -1,56 +1,51 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/lib/store";
-import { PlusCircle, Loader2, Calendar, Brain, Timer, Check, X } from "lucide-react";
 import { TaskCategory, TaskPriority } from "@/lib/types";
-import { motion, AnimatePresence } from "framer-motion";
+import { Check, PlusCircle, Calendar, Timer, X, Loader2, Brain } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export function AddTask() {
   const { addTask, state } = useAppStore();
-  const [title, setTitle] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [category, setCategory] = useState<TaskCategory>(TaskCategory.OTHER);
-  const [priority, setPriority] = useState<TaskPriority>(TaskPriority.MEDIUM);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState(TaskCategory.WORK);
+  const [priority, setPriority] = useState(TaskPriority.MEDIUM);
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
-  
-  // Estados para IA
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [isEstimating, setIsEstimating] = useState(false);
   const [isSuggestingPriority, setIsSuggestingPriority] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(true);
-  
-  // Estado para animação de sucesso
-  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (title.trim()) {
       addTask(
-        title.trim(), 
-        category, 
-        priority, 
-        estimatedTime || undefined, 
+        title.trim(),
+        category,
+        priority,
+        estimatedTime || undefined,
         dueDate ? dueDate.getTime() : undefined
       );
-      setTitle("");
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
-        resetForm();
+        toggleForm();
       }, 1500);
     }
   };
 
   const resetForm = () => {
-    setCategory(TaskCategory.OTHER);
+    setTitle("");
+    setCategory(TaskCategory.WORK);
     setPriority(TaskPriority.MEDIUM);
     setDueDate(null);
     setEstimatedTime(null);
-    // Opcionalmente, fechar o formulário
-    // setShowForm(false);
+    setShowSuccess(false);
   };
 
   const toggleForm = () => {
@@ -60,19 +55,8 @@ export function AddTask() {
     }
   };
 
-  // Gerar sugestões usando IA quando o título é digitado e tem mais de 5 caracteres
-  useEffect(() => {
-    const debouncedGenerateSuggestions = setTimeout(() => {
-      if (title.length > 5 && aiEnabled) {
-        generateAISuggestions();
-      }
-    }, 800);
-
-    return () => clearTimeout(debouncedGenerateSuggestions);
-  }, [title, aiEnabled]);
-
   // Função para gerar sugestões usando IA
-  const generateAISuggestions = async () => {
+  const generateAISuggestions = useCallback(async () => {
     try {
       // Gerar estimativa de tempo
       setIsEstimating(true);
@@ -128,7 +112,18 @@ export function AddTask() {
       setIsEstimating(false);
       setIsSuggestingPriority(false);
     }
-  };
+  }, [title, category, dueDate, state.tasks]);
+
+  // Gerar sugestões usando IA quando o título é digitado e tem mais de 5 caracteres
+  useEffect(() => {
+    const debouncedGenerateSuggestions = setTimeout(() => {
+      if (title.length > 5 && aiEnabled) {
+        generateAISuggestions();
+      }
+    }, 800);
+
+    return () => clearTimeout(debouncedGenerateSuggestions);
+  }, [title, aiEnabled, generateAISuggestions]);
 
   const categoryLabels = {
     [TaskCategory.WORK]: { label: "Trabalho", icon: "💼" },

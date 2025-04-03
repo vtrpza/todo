@@ -3,9 +3,21 @@
 import { AddTask } from "@/components/AddTask";
 import { GamificationPanel } from "@/components/GamificationPanel";
 import { TaskList } from "@/components/TaskList";
+import { SearchAndFilter } from "@/components/SearchAndFilter";
 import { motion } from "framer-motion";
+import { useState } from "react";
+import { FilterProvider } from "@/lib/filterContext";
+import { TaskCategory, TaskPriority } from "@/lib/types";
 
 export default function Home() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState({
+    categories: [] as TaskCategory[],
+    priorities: [] as TaskPriority[],
+    onlyPending: false,
+    dueSoon: false
+  });
+
   return (
     <main className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-2xl mx-auto">
@@ -23,9 +35,12 @@ export default function Home() {
           </p>
         </motion.div>
 
-        <GamificationPanel />
-        <AddTask />
-        <TaskList />
+        <FilterProvider value={{ searchTerm, setSearchTerm, filters, setFilters }}>
+          <GamificationPanel />
+          <SearchAndFilter />
+          <AddTask />
+          <TaskList />
+        </FilterProvider>
       </div>
     </main>
   );

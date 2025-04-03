@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { 
   AppState, 
   GamificationState, 
@@ -56,6 +56,7 @@ type AppContextType = {
   getFilteredTasks: (filters: { categories?: TaskCategory[], completed?: boolean, priority?: TaskPriority[] }) => Task[];
   showToast: (message: string, type: ToastType, duration?: number) => void;
   dismissToast: (id: string) => void;
+  searchTasks: (term: string) => Task[];
 };
 
 // Criação do contexto
@@ -74,6 +75,87 @@ export const useAppStore = () => {
 export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<AppState>(initialAppState);
 
+  // Função para gerar um desafio diário
+  const generateDailyChallenge = useCallback(() => {
+    // Função auxiliar para obter nome legível da categoria
+    const getCategoryName = (category: TaskCategory): string => {
+      const categoryLabels: Record<TaskCategory, string> = {
+        [TaskCategory.WORK]: "Trabalho",
+        [TaskCategory.PERSONAL]: "Pessoal",
+        [TaskCategory.STUDY]: "Estudo",
+        [TaskCategory.HEALTH]: "Saúde",
+        [TaskCategory.LEISURE]: "Lazer",
+        [TaskCategory.OTHER]: "Outros"
+      };
+      return categoryLabels[category];
+    };
+
+    // Lista de modelos de desafios
+    const challengeTemplates = [
+      {
+        title: "Concluir tarefas",
+        description: "Complete [requirement] tarefas hoje",
+        type: "task_completion" as const,
+        requirement: () => Math.floor(Math.random() * 3) + 2, // 2-4 tarefas
+        pointsReward: () => Math.floor(Math.random() * 20) + 10, // 10-30 pontos
+      },
+      {
+        title: "Foco em categoria",
+        description: "Complete [requirement] tarefas da categoria [category]",
+        type: "category_focus" as const,
+        requirement: () => Math.floor(Math.random() * 2) + 1, // 1-2 tarefas
+        pointsReward: () => Math.floor(Math.random() * 15) + 15, // 15-30 pontos
+        categories: Object.values(TaskCategory)
+      }
+    ];
+    
+    // Escolher um modelo aleatoriamente
+    const templateIndex = Math.floor(Math.random() * challengeTemplates.length);
+    const challengeTemplate = challengeTemplates[templateIndex];
+    
+    // Gerar requisito específico
+    const requirement = challengeTemplate.requirement();
+    const pointsReward = challengeTemplate.pointsReward();
+    
+    // Data de expiração (final do dia atual)
+    const today = new Date();
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).getTime();
+    
+    // Criar desafio
+    let category: TaskCategory | undefined;
+    if (challengeTemplate.type === 'category_focus' && challengeTemplate.categories) {
+      category = challengeTemplate.categories[
+        Math.floor(Math.random() * challengeTemplate.categories.length)
+      ];
+    }
+    
+    const description = challengeTemplate.description
+      .replace('[requirement]', requirement.toString())
+      .replace('[category]', category ? `"${getCategoryName(category)}"` : '');
+    
+    const newChallenge: Challenge = {
+      id: crypto.randomUUID(),
+      title: challengeTemplate.title,
+      description,
+      completed: false,
+      createdAt: Date.now(),
+      expiresAt: endOfDay,
+      pointsReward,
+      type: challengeTemplate.type,
+      requirement,
+      progress: 0,
+      category
+    };
+    
+    setState(prev => ({
+      ...prev,
+      gamification: {
+        ...prev.gamification,
+        dailyChallenges: [...prev.gamification.dailyChallenges, newChallenge]
+      }
+    }));
+  }, []);
+
   // Carregar dados do localStorage ao iniciar a aplicação
   useEffect(() => {
     const savedState = localStorage.getItem("todoApp");
@@ -90,7 +172,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     if (!savedState || !JSON.parse(savedState).gamification.dailyChallenges?.length) {
       generateDailyChallenge();
     }
-  }, []);
+  }, [generateDailyChallenge]);
 
   // Salvar dados no localStorage quando o estado muda
   useEffect(() => {
@@ -152,7 +234,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     checkDailyChallenges();
     const interval = setInterval(checkDailyChallenges, 60 * 60 * 1000); // Verificar a cada hora
     return () => clearInterval(interval);
-  }, [state.gamification.dailyChallenges]);
+  }, [state.gamification.dailyChallenges, generateDailyChallenge]);
 
   // Toast functionality
   const showToast = (message: string, type: ToastType = 'info', duration: number = 3000) => {
@@ -498,15 +580,32 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     }));
   };
 
-  // Função para atualizar tema
+  // Função para atualizar o tema
   const updateTheme = (theme: 'light' | 'dark' | 'system') => {
-    setState((prev) => ({
+    setState(prev => ({
       ...prev,
       settings: {
         ...prev.settings,
-        theme,
-      },
+        theme
+      }
     }));
+    
+    // Atualizar o tema no documento (para integração com next-themes)
+    if (typeof document !== 'undefined') {
+      const root = document.documentElement;
+      
+      // Remover classes existentes
+      root.classList.remove('light', 'dark');
+      
+      // Adicionar nova classe, se não for 'system'
+      if (theme !== 'system') {
+        root.classList.add(theme);
+      } else {
+        // Para 'system', detectar preferência do sistema
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.classList.add(systemPrefersDark ? 'dark' : 'light');
+      }
+    }
   };
   
   // Função para atualizar categoria de uma tarefa
@@ -557,87 +656,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     }));
   };
   
-  // Função para gerar um desafio diário
-  const generateDailyChallenge = () => {
-    // Lista de modelos de desafios
-    const challengeTemplates = [
-      {
-        title: "Concluir tarefas",
-        description: "Complete [requirement] tarefas hoje",
-        type: "task_completion" as const,
-        requirement: () => Math.floor(Math.random() * 3) + 2, // 2-4 tarefas
-        pointsReward: () => Math.floor(Math.random() * 20) + 10, // 10-30 pontos
-      },
-      {
-        title: "Foco em categoria",
-        description: "Complete [requirement] tarefas da categoria [category]",
-        type: "category_focus" as const,
-        requirement: () => Math.floor(Math.random() * 2) + 1, // 1-2 tarefas
-        pointsReward: () => Math.floor(Math.random() * 15) + 15, // 15-30 pontos
-        categories: Object.values(TaskCategory)
-      }
-    ];
-    
-    // Escolher um modelo aleatoriamente
-    const templateIndex = Math.floor(Math.random() * challengeTemplates.length);
-    const challengeTemplate = challengeTemplates[templateIndex];
-    
-    // Gerar requisito específico
-    const requirement = challengeTemplate.requirement();
-    const pointsReward = challengeTemplate.pointsReward();
-    
-    // Data de expiração (final do dia atual)
-    const today = new Date();
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).getTime();
-    
-    // Criar desafio
-    let category: TaskCategory | undefined;
-    if (challengeTemplate.type === 'category_focus' && challengeTemplate.categories) {
-      category = challengeTemplate.categories[
-        Math.floor(Math.random() * challengeTemplate.categories.length)
-      ];
-    }
-    
-    const description = challengeTemplate.description
-      .replace('[requirement]', requirement.toString())
-      .replace('[category]', category ? `"${getCategoryName(category)}"` : '');
-    
-    const newChallenge: Challenge = {
-      id: crypto.randomUUID(),
-      title: challengeTemplate.title,
-      description,
-      completed: false,
-      createdAt: Date.now(),
-      expiresAt: endOfDay,
-      pointsReward,
-      type: challengeTemplate.type,
-      requirement,
-      progress: 0,
-      category
-    };
-    
-    setState(prev => ({
-      ...prev,
-      gamification: {
-        ...prev.gamification,
-        dailyChallenges: [...prev.gamification.dailyChallenges, newChallenge]
-      }
-    }));
-  };
-  
-  // Função auxiliar para obter nome legível da categoria
-  const getCategoryName = (category: TaskCategory): string => {
-    const categoryLabels: Record<TaskCategory, string> = {
-      [TaskCategory.WORK]: "Trabalho",
-      [TaskCategory.PERSONAL]: "Pessoal",
-      [TaskCategory.STUDY]: "Estudo",
-      [TaskCategory.HEALTH]: "Saúde",
-      [TaskCategory.LEISURE]: "Lazer",
-      [TaskCategory.OTHER]: "Outros"
-    };
-    return categoryLabels[category];
-  };
-  
   // Função para marcar um desafio como concluído
   const completeChallenge = (id: string) => {
     const challenge = state.gamification.dailyChallenges.find(c => c.id === id);
@@ -671,42 +689,68 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   
   // Função para obter tarefas por categoria
   const getTasksByCategory = (category: TaskCategory): Task[] => {
-    return state.tasks.filter(task => task.category === category && !task.parent);
+    return state.tasks.filter(task => task.category === category);
   };
   
-  // Função para obter tarefas filtradas
+  // Função para filtrar tarefas por termo de busca
+  const searchTasks = (term: string): Task[] => {
+    if (!term.trim()) return state.tasks;
+    
+    const lowercaseTerm = term.toLowerCase().trim();
+    
+    return state.tasks.filter(task => 
+      task.title.toLowerCase().includes(lowercaseTerm)
+    );
+  };
+  
+  // Função para obter tarefas filtradas com critérios múltiplos
   const getFilteredTasks = (filters: { 
-    categories?: TaskCategory[], 
-    completed?: boolean,
-    priority?: TaskPriority[] 
+    searchTerm?: string; 
+    categories?: TaskCategory[]; 
+    priorities?: TaskPriority[]; 
+    onlyPending?: boolean;
+    dueSoon?: boolean;
   }): Task[] => {
-    return state.tasks.filter(task => {
-      // Filtrar por categoria
-      if (filters.categories && filters.categories.length > 0) {
-        if (!task.category || !filters.categories.includes(task.category)) {
-          return false;
-        }
-      }
+    let filteredTasks = [...state.tasks];
+    
+    // Filtrar por termo de busca
+    if (filters.searchTerm && filters.searchTerm.trim()) {
+      const term = filters.searchTerm.toLowerCase().trim();
+      filteredTasks = filteredTasks.filter(task => 
+        task.title.toLowerCase().includes(term)
+      );
+    }
+    
+    // Filtrar por categorias
+    if (filters.categories && filters.categories.length > 0) {
+      filteredTasks = filteredTasks.filter(task => 
+        task.category && filters.categories?.includes(task.category)
+      );
+    }
+    
+    // Filtrar por prioridades
+    if (filters.priorities && filters.priorities.length > 0) {
+      filteredTasks = filteredTasks.filter(task => 
+        task.priority && filters.priorities?.includes(task.priority)
+      );
+    }
+    
+    // Filtrar apenas tarefas pendentes
+    if (filters.onlyPending) {
+      filteredTasks = filteredTasks.filter(task => !task.completed);
+    }
+    
+    // Filtrar tarefas vencendo em breve (próximos 3 dias)
+    if (filters.dueSoon) {
+      const now = Date.now();
+      const threeDaysFromNow = now + (3 * 24 * 60 * 60 * 1000);
       
-      // Filtrar por status de conclusão
-      if (filters.completed !== undefined && task.completed !== filters.completed) {
-        return false;
-      }
-      
-      // Filtrar por prioridade
-      if (filters.priority && filters.priority.length > 0) {
-        if (!task.priority || !filters.priority.includes(task.priority)) {
-          return false;
-        }
-      }
-      
-      // Não exibir subtarefas na lista principal
-      if (task.parent) {
-        return false;
-      }
-      
-      return true;
-    });
+      filteredTasks = filteredTasks.filter(task => 
+        task.dueDate && task.dueDate > now && task.dueDate <= threeDaysFromNow && !task.completed
+      );
+    }
+    
+    return filteredTasks;
   };
 
   return (
@@ -727,6 +771,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         completeChallenge,
         getTasksByCategory,
         getFilteredTasks,
+        searchTasks,
         showToast,
         dismissToast
       }}

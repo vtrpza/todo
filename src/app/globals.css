@@ -82,6 +82,7 @@
   --animation-btn: 0.25s;
   --animation-input: 0.2s;
   --animation-transition: 0.15s;
+  --color-scheme: light;
 }
 
 .dark {
@@ -119,6 +120,7 @@
   
   /* Dark theme RGB value for primary color */
   --primary-rgb: 235, 235, 235;
+  --color-scheme: dark;
 }
 
 @layer base {
@@ -149,6 +151,30 @@
 @keyframes bounce-subtle {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-2px); }
+}
+
+/* Animação de tarefa completa */
+@keyframes task-complete {
+  0% { 
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0);
+  }
+  30% { 
+    transform: scale(1.03);
+    box-shadow: 0 0 0 10px rgba(var(--primary-rgb), 0.2);
+  }
+  60% { 
+    transform: scale(0.98);
+    box-shadow: 0 0 0 5px rgba(var(--primary-rgb), 0.2);
+  }
+  100% { 
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0);
+  }
+}
+
+.task-complete-animation {
+  animation: task-complete 1s ease-in-out forwards;
 }
 
 /* Applied animations */
@@ -195,4 +221,26 @@ input, textarea, select {
   transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
   transition-duration: var(--animation-transition);
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Improved theme detection */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-scheme: dark;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-scheme: light;
+  }
+}
+
+/* Support for Next-themes */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
 }

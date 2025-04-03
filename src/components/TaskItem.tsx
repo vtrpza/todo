@@ -3,7 +3,7 @@
 import { Task, TaskCategory, TaskPriority } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Trash2, Calendar, Timer, AlertTriangle } from "lucide-react";
+import { Sparkles, Trash2, Calendar, Timer, AlertTriangle, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,21 @@ export function TaskItem({ task, onGenerateSubtasks }: TaskItemProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   const handleToggle = () => {
+    // Adicionar efeito de confete quando concluir uma tarefa não concluída
+    if (!task.completed) {
+      // Trigger confetti animation
+      const element = document.getElementById(`task-${task.id}`);
+      if (element) {
+        // Adicionar classe temporária para animar
+        element.classList.add('task-complete-animation');
+        
+        // Remover após a animação terminar
+        setTimeout(() => {
+          element.classList.remove('task-complete-animation');
+        }, 1000);
+      }
+    }
+    
     toggleTaskCompletion(task.id);
   };
 
@@ -31,6 +46,41 @@ export function TaskItem({ task, onGenerateSubtasks }: TaskItemProps) {
   const handleGenerateSubtasks = (e: React.MouseEvent) => {
     e.stopPropagation();
     onGenerateSubtasks(task.id);
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Criar texto para compartilhar
+    const shareText = `Tarefa: ${task.title}${task.category ? ` (${getCategoryName(task.category)})` : ''}${task.priority ? ` - Prioridade: ${priorityLabels[task.priority]}` : ''}`;
+    
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'TaskHero - Compartilhar Tarefa',
+          text: shareText,
+        });
+      } else {
+        // Fallback para navegadores que não suportam a API de compartilhamento
+        navigator.clipboard.writeText(shareText);
+        // Aqui você pode mostrar um toast indicando que foi copiado para o clipboard
+      }
+    } catch (error) {
+      console.error("Erro ao compartilhar tarefa:", error);
+    }
+  };
+
+  const getCategoryName = (category: TaskCategory): string => {
+    const categoryNames: Record<TaskCategory, string> = {
+      [TaskCategory.WORK]: "Trabalho",
+      [TaskCategory.PERSONAL]: "Pessoal",
+      [TaskCategory.STUDY]: "Estudo",
+      [TaskCategory.HEALTH]: "Saúde",
+      [TaskCategory.LEISURE]: "Lazer",
+      [TaskCategory.OTHER]: "Outros"
+    };
+    
+    return categoryNames[category];
   };
 
   const categoryIcons: Record<TaskCategory, string> = {
@@ -112,6 +162,7 @@ export function TaskItem({ task, onGenerateSubtasks }: TaskItemProps) {
       onClick={() => setShowOptions(!showOptions)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      id={`task-${task.id}`}
     >
       <Checkbox 
         checked={task.completed} 
@@ -215,6 +266,15 @@ export function TaskItem({ task, onGenerateSubtasks }: TaskItemProps) {
                   Dividir em subtarefas
                 </Button>
               )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-7 text-xs transition-all hover:shadow-sm hover:translate-y-[-1px]" 
+                onClick={handleShare}
+              >
+                <Share2 size={14} className="mr-1" /> 
+                Compartilhar
+              </Button>
               <Button 
                 variant="destructive" 
                 size="sm" 
